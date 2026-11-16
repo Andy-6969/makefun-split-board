@@ -3,12 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://make.fun; img-src 'self' https://make.fun data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Live make.fun bounties: rewards, entry fees, deadlines, leaderboards and profiles.">
 <title>make.fun bounties</title>
 <link rel="stylesheet" href="style.css">
-<script type="module" src="main.js"></script>
+<script type="module" src="core.js"></script>
 </head>
 <body>
-<header><a href="#/">make.fun bounties</a></header>
-<main id="app"></main>
+<a class="skip" id="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="#/"><b>make.fun</b> bounties</a>
+    <nav class="nav" aria-label="Main"><a id="nav-board" href="#/">Open bounties</a></nav>
+    <p class="net" id="net" title="Requests this visit: network calls, answers served from memory, revalidations the API answered 304, JSON received">connecting…</p>
+  </div>
+</header>
+<main id="main" class="wrap" tabindex="-1"></main>
+<footer class="wrap foot">Every number is read live from make.fun's public API and refreshed once a minute.</footer>
 </body>
 </html>
