@@ -3,7 +3,8 @@
 // nodes. A search box narrows the list to matching entrants without leaving the page.
 export { renderLeaderboard as render, VirtualRows, flattenStandings, ROW_HEIGHT };
 
-import { apiPath, cachedJSON, count, esc, fields, money, scoreText, setText } from './core.js';
+import { apiPath, cachedJSON } from './core.js';
+import { count, esc, fields, money, scoreText, setText } from './ui.js';
 
 /** Every row has this height in px, so a row's position is its index times this. */
 const ROW_HEIGHT = 56;
@@ -31,10 +32,11 @@ function flattenStandings(board, prizes) {
  * rewrites one element.
  */
 class VirtualRows {
-  constructor(host, create, fill) {
+  constructor(host, create, fill, onDraw) {
     this.host = host;
     this.create = create;
     this.fill = fill;
+    this.onDraw = onDraw;
     this.items = [];
     this.pool = [];
     this.frame = 0;
@@ -83,6 +85,9 @@ class VirtualRows {
       row.hidden = true;
       row._index = -1;
     }
+    const firstOnScreen = Math.max(0, Math.floor(-top / ROW_HEIGHT));
+    const lastOnScreen = Math.min(this.items.length, Math.ceil((innerHeight - top) / ROW_HEIGHT));
+    this.onDraw?.(firstOnScreen, lastOnScreen, this.items.length, this.pool.length);
   }
   destroy() {
     removeEventListener('scroll', this.schedule);
@@ -121,31 +126,33 @@ async function renderLeaderboard(main, { params: [slug], isCurrent }) {
   const column = board.columns?.find((c) => c.key === board.rank_key);
   const tieBreak = board.tie_break?.title;
   const bountyHref = `#/bounty/${encodeURIComponent(slug)}`;
-  const everyone = `Showing all ${count(all.length)} entries; only the rows on screen are in the page.`;
 
   main.innerHTML = `
     <section class="lb" aria-labelledby="lb-title">
-      <header class="page-head">
-        <p class="crumbs"><a href="#/">All bounties</a> <span aria-hidden="true">/</span> <a href="${bountyHref}">${esc(b.title)}</a></p>
-        <div class="title-row"><h1 id="lb-title">Leaderboard</h1></div>
-        <nav class="tabs" aria-label="This bounty"><a href="${bountyHref}">Overview</a><a href="${bountyHref}/leaderboard" aria-current="page">Leaderboard <span class="n">${count(all.length)}</span></a></nav>
-      </header>
+      <p class="crumbs"><a href="#/">All bounties</a> <span aria-hidden="true">/</span> <a href="${bountyHref}">${esc(b.title)}</a></p>
+      <div class="title-row"><h1 id="lb-title" tabindex="-1">Leaderboard · ${esc(b.title)}</h1></div>
+      <nav class="tabs" aria-label="This bounty"><a href="${bountyHref}">Overview</a><a href="${bountyHref}/leaderboard" aria-current="page">Leaderboard <span class="n">${count(all.length)}</span></a></nav>
       <div class="lb-bar">
-        <p>${count(all.length)} ranked entries · ${esc(board.phase?.title ?? 'current phase')} · ranked by <b>${esc(column?.title ?? 'score')}</b>${tieBreak ? `, ties by ${esc(tieBreak)}` : ''}${board.phase?.placements_held ? ' · places are provisional until the results' : ''}</p>
+        <div>
+          <p>Live pot <b class="money">${money(b.potUsd ?? b.rewardAmount)}</b> · ${count(all.length)} ranked entries · ${esc(board.phase?.title ?? 'current phase')} · ranked by <b>${esc(column?.title ?? 'score')}</b>${tieBreak ? `, ties by ${esc(tieBreak)}` : ''}${board.phase?.placements_held ? ' · places provisional until the results' : ''}</p>
+          <p class="lb-live" data-f="live" aria-live="off"></p>
+        </div>
         <label class="search"><span>Find an entrant</span><input type="search" data-f="q" placeholder="Handle or entry title" autocomplete="off" spellcheck="false"></label>
       </div>
       <div class="ltable">
-        <div class="lhead" aria-hidden="true"><span>#</span><span>Entrant and entry</span><span class="num">${esc(column?.title ?? 'Score')}</span><span class="num">Prize now</span></div>
+        <div class="lhead" aria-hidden="true"><span>Rank</span><span>Entrant and entry</span><span class="num">${esc(column?.title ?? 'Score')}</span><span class="num">Prize now</span></div>
         <ol class="vlist" aria-label="Standings" data-f="list"></ol>
         <p class="empty" data-f="none" hidden>No entrant matches that search.</p>
       </div>
-      <p class="dim" data-f="shown" aria-live="polite"></p>
     </section>`;
 
   const f = fields(main);
-  const list = new VirtualRows(f.list, createRow, fillRow);
+  // The live line is rewritten (one text node) on every draw: which rows are on screen, how many elements exist.
+  const showWindow = (first, last, total, elements) =>
+    setText(f.live, total ? `Rows ${count(first + 1)}–${count(Math.min(last, total))} of ${count(total)} on screen · ${elements} row elements in the page (virtual list)` : 'No rows');
+  const list = new VirtualRows(f.list, createRow, fillRow, showWindow);
   list.setItems(all);
-  setText(f.shown, everyone);
+  scrollTo(0, 0);
   let timer = 0;
   f.q.addEventListener('input', () => {
     clearTimeout(timer);
@@ -154,7 +161,6 @@ async function renderLeaderboard(main, { params: [slug], isCurrent }) {
       const matches = q ? all.filter((row) => row.search.includes(q)) : all;
       list.setItems(matches);
       f.none.hidden = matches.length > 0;
-      setText(f.shown, q ? `${count(matches.length)} of ${count(all.length)} entries match “${f.q.value.trim()}”.` : everyone);
     }, 120);
   });
   return () => {

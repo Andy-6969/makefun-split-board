@@ -3,24 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://make.fun; img-src 'self' https://make.fun data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
-<meta name="color-scheme" content="light dark">
-<meta name="description" content="Live make.fun bounties: rewards, entry fees, deadlines, leaderboards and profiles.">
 <title>make.fun bounties</title>
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css">
+<link rel="icon" href="favicon.svg">
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf9;--ink:#1c1a16;--muted:#655f55;--line:#e0d9cc;--sans:system-ui,"Segoe UI",Roboto,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans)}
+a{color:inherit}
+.wrap{max-width:1232px;margin:auto;padding:0 24px}
+.top{background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{display:flex;flex-wrap:wrap;align-items:center;gap:0 24px;min-height:56px}
+.brand{font-size:18px;text-decoration:none}
+.net{margin:0 0 0 auto;font:12.5px ui-monospace,Consolas,monospace;color:var(--muted)}
+main{display:block;padding-top:20px;padding-bottom:48px;outline:0}
+.skip{position:absolute;left:-999px}.skip:focus{left:8px}
+@media(max-width:720px){.wrap{padding:0 16px}.net{flex-basis:100%;margin:0 0 8px}}
+</style>
 <script type="module" src="core.js"></script>
 </head>
 <body>
-<a class="skip" id="skip" href="#main">Skip to content</a>
-<header class="top">
-  <div class="wrap top-in">
-    <a class="brand" href="#/"><b>make.fun</b> bounties</a>
-    <nav class="nav" aria-label="Main"><a id="nav-board" href="#/">Open bounties</a></nav>
-    <p class="net" id="net" title="Requests this visit: network calls, answers served from memory, revalidations the API answered 304, JSON received">connecting…</p>
-  </div>
-</header>
-<main id="main" class="wrap" tabindex="-1"></main>
-<footer class="wrap foot">Every number is read live from make.fun's public API and refreshed once a minute.</footer>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><div class="wrap top-in">
+<a class="brand" href="#/"><b>make.fun</b> bounties</a>
+<nav class="nav"><a id="nav-board" href="#/">Open bounties</a></nav>
+<p class="net" id="net">connecting…</p>
+</div></header>
+<main id="main" class="wrap" tabindex="-1">Loading live data…</main>
 </body>
 </html>

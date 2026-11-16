@@ -9,15 +9,17 @@ import { Cdp, ROOT, openPage, sleep, startChrome, startServer } from './cdp.mjs'
 const PORT = 8098;
 const DEBUG_PORT = 9338;
 const MAX_BYTES = 256 * 1024;
-/** The bounty for the second shot: open, with thousands of entries, so its leaderboard card is full. */
-const BOUNTY = process.env.SHOT_BOUNTY ?? 'tiny-chess-01';
+/** The cover's selected bounty: one with an entry fee (so pot, fee shares and fee both show) and a live leaderboard. */
+const COVER_BOUNTY = process.env.SHOT_COVER ?? 'makefun-frontend-01';
+/** The second shot's leaderboard: open, with thousands of entries, to show the virtual list at work. */
+const BIG_BOUNTY = process.env.SHOT_BOUNTY ?? 'tiny-chess-01';
 
 const top = await fetch('https://make.fun/api/rankings?limit=1').then((r) => r.json());
 const handle = process.env.SHOT_HANDLE ?? top.items[0].handle;
 
 const SHOTS = [
-  { name: '1-board', path: '#/', viewport: { width: 1280, height: 800 }, about: 'The bounty board (cover): every live bounty with reward, entry fee, a live countdown and entries.' },
-  { name: '2-bounty', path: `#/bounty/${BOUNTY}`, viewport: { width: 1280, height: 800 }, about: 'A bounty page: live pot, entry fee, closes in, entries, the rewards table, dates and phases, and the top of its leaderboard.' },
+  { name: '1-board', path: `#/bounty/${COVER_BOUNTY}`, viewport: { width: 1280, height: 800 }, ready: `document.querySelectorAll('.top10 .who a').length >= 5`, about: 'Cover, split view: the live board list (reward, entry fee, countdown, entries) beside the selected bounty with live pot, entry fee, closes in, entries, dates and phases, rewards with fee shares, and its top 10.' },
+  { name: '2-leaderboard', path: `#/bounty/${BIG_BOUNTY}/leaderboard`, viewport: { width: 1280, height: 800 }, ready: `document.querySelectorAll('.lrow:not([hidden])').length > 5`, about: 'A full leaderboard of 6,000+ entries as a virtual list: linked handles, score and prize now, and the line saying which rows are on screen and how few elements exist.' },
   { name: '3-profile', path: `#/u/${handle}`, viewport: { width: 412, height: 892 }, mobile: true, about: 'A public profile on a phone: record, entries with place, prize and score.' },
 ];
 
@@ -33,13 +35,14 @@ try {
   // the status line shows the cache and make.fun's 304s at work (every figure on it is counted, none is staged).
   const page = await openPage(cdp, SHOTS[0].viewport);
   await page.go(`http://127.0.0.1:${PORT}/#/`);
+  await page.go(SHOTS[0].path);
+  await page.waitFor(SHOTS[0].ready);
   await page.go(SHOTS[1].path);
-  await page.waitFor(`document.querySelectorAll('.top10 .who a').length >= 10`);
   await sleep(21_000);
   for (const shot of SHOTS) {
     await page.resize(shot.viewport.width, shot.viewport.height, Boolean(shot.mobile));
     await page.go(shot.path);
-    if (shot.name === '2-bounty') await page.waitFor(`document.querySelectorAll('.top10 .who a').length >= 10`);
+    if (shot.ready) await page.waitFor(shot.ready);
     await sleep(1500);
     await page.evaluate('scrollTo(0, 0); document.activeElement?.blur(); true');
     let file = `${shot.name}.png`;

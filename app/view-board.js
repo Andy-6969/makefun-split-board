@@ -1,9 +1,10 @@
 // The bounty board: every live bounty with its reward or live pot, entry fee, time left and entries. Sorting,
 // filtering and the minute-by-minute refresh all go through one keyed patch, so rows are moved and their text
-// updated in place, never rebuilt; the countdowns are kept by core's single ticker.
-export { renderBoard as render, toBoardRow, patchBoardRows, SORTS };
+// updated in place, never rebuilt. mountBoardList is the same list beside a bounty in the split view.
+export { renderBoard as render, patchBoardRows, mountBoardList, toBoardRow, SORTS };
 
-import { apiPath, cachedJSON, countdownHTML, count, esc, fields, money, patchKeyedList, setText, utcDate, viewState, watchJSON } from './core.js';
+import { apiPath, cachedJSON } from './core.js';
+import { countdownHTML, count, fields, money, patchKeyedList, setText, utcDate, viewState, watchJSON } from './ui.js';
 
 /** The sort chips: label and comparator over normalised rows. */
 const SORTS = {
@@ -109,6 +110,42 @@ function createChip() {
   return chip;
 }
 
+/**
+ * The board as a compact list beside a bounty (split view on wide screens): bounties before their deadline,
+ * closing soonest first, the selected one marked. select() moves the mark in place; stop() ends the watch.
+ */
+async function mountBoardList(list, selected) {
+  let rows = [];
+  const draw = () => {
+    const now = Date.now();
+    const open = rows.filter((b) => b.end > now).sort(SORTS.soon[1]);
+    patchKeyedList(list, open, (b) => b.slug, createBoardRow, (row, b) => {
+      updateBoardRow(row, b);
+      const isSelected = b.slug === selected;
+      row.classList.toggle('is-selected', isSelected);
+      if (isSelected) row._f.title.setAttribute('aria-current', 'page');
+      else row._f.title.removeAttribute('aria-current');
+    });
+    return open.length;
+  };
+  const load = (answer) => {
+    const now = Date.now();
+    rows = answer.items.map((item) => toBoardRow(item, now));
+    return draw();
+  };
+  const shown = load(await cachedJSON(apiPath.board()));
+  const stop = watchJSON(apiPath.board(), load);
+  return {
+    shown,
+    select(slug) {
+      selected = slug;
+      draw();
+      list.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' });
+    },
+    stop,
+  };
+}
+
 /** Keeps sort and category in the address, without a hashchange (so nothing re-routes). */
 function writeState(state) {
   const query = new URLSearchParams();
@@ -181,6 +218,7 @@ async function renderBoard(main, { query, isCurrent }) {
   });
   load(data);
   writeState(state);
+  scrollTo(0, 0);
 
   // A row whose deadline passes moves to the past list on the next minute's patch.
   const stopWatching = watchJSON(apiPath.board(), load);

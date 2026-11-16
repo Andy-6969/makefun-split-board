@@ -3,7 +3,10 @@
 // visit is answered from the cache or by a 304, the leaderboard is virtual, nothing loads from another origin,
 // nothing logs an error, and a 390 px phone has no sideways scroll.
 //   node tools/uitest.mjs
-import { Cdp, openPage, sleep, startChrome, startServer } from './cdp.mjs';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
+import { Cdp, ROOT, openPage, sleep, startChrome, startServer } from './cdp.mjs';
 
 const PORT = 8097;
 const DEBUG_PORT = 9337;
@@ -98,26 +101,40 @@ try {
     bountySlug = decodeURIComponent(href.split('/')[2]);
     await page.waitFor(`document.querySelector('.top10 .who a') || document.querySelector('.top10 li.muted:not(:first-child)')`, 60_000);
     const view = await page.evaluate(`({
-      hash: location.hash, h1: document.querySelector('h1').textContent,
+      hash: location.hash, h1: document.querySelector('.split-detail h1').textContent,
       strip: [...document.querySelectorAll('.strip dd')].map((d) => d.textContent),
       rewards: document.querySelectorAll('.tbl tbody tr').length, potTotal: document.querySelector('[data-f=potTotal]')?.textContent,
-      dates: document.querySelectorAll('.kv > div').length, phases: document.querySelectorAll('.phases li').length,
+      dates: document.querySelectorAll('.datesbar > div').length,
       top: document.querySelectorAll('.top10 .who a').length, about: document.querySelector('.prose').textContent.length,
-      state: document.querySelector('.pill').textContent })`);
+      state: document.querySelector('.pill').textContent,
+      listRows: document.querySelectorAll('.split-list .brow').length,
+      selected: document.querySelector('.split-list .is-selected .row-link')?.getAttribute('href') })`);
     expect(view.hash === `#/bounty/${encodeURIComponent(bountySlug)}`, `hash ${view.hash}`);
     expect(view.strip.length === 4 && /^\$/.test(view.strip[0]), `strip ${view.strip}`);
     expect(view.rewards >= 1 && /^\$/.test(view.potTotal ?? ''), 'no rewards table');
     expect(view.dates >= 2, 'no dates');
     expect(view.top >= 1, 'no leaderboard rows');
     expect(view.about > 200, 'no description');
-    return `${view.h1} · ${view.strip.join(' / ')} · ${view.rewards} reward rows · ${view.phases} phases · ${view.state}`;
+    expect(view.listRows >= 3 && view.selected === view.hash, `split list ${view.listRows} rows, selected ${view.selected}`);
+    return `${view.h1} · ${view.strip.join(' / ')} · ${view.rewards} reward rows · ${view.dates} dates · ${view.state} · board list of ${view.listRows} beside it`;
+  });
+
+  await check('split view: picking another bounty keeps the board list and moves the selection in place', async () => {
+    await page.evaluate(`window.__probeList = document.querySelector('.split-list'); window.__probeRow = document.querySelector('.split-list .brow:not(.is-selected)'); true`);
+    const href = await follow(page, '.split-list .brow:not(.is-selected) .row-link');
+    await follow(page, `.split-list .row-link[href="#/bounty/${encodeURIComponent(bountySlug)}"]`);
+    const after = await page.evaluate(`({ sameList: document.querySelector('.split-list') === window.__probeList, sameRow: window.__probeRow.isConnected, selected: document.querySelector('.split-list .is-selected .row-link').getAttribute('href') })`);
+    expect(after.sameList && after.sameRow, 'the board list was rebuilt');
+    expect(after.selected === `#/bounty/${encodeURIComponent(bountySlug)}`, `selection is ${after.selected}`);
+    return `${href} and back; list and rows kept`;
   });
 
   await check('bounty -> full leaderboard is virtualised and searchable', async () => {
     const callsBefore = (await page.evaluate(NET)).calls;
     await follow(page, '[data-f=lbLink]');
     const net = await page.evaluate(NET);
-    const view = await page.evaluate(`({ hash: location.hash, total: +document.querySelector('.lrow')?.getAttribute('aria-setsize'), inDom: document.querySelectorAll('.lrow').length })`);
+    const view = await page.evaluate(`({ hash: location.hash, total: +document.querySelector('.lrow')?.getAttribute('aria-setsize'), inDom: document.querySelectorAll('.lrow').length, live: document.querySelector('.lb-live').textContent })`);
+    expect(/^Rows 1–\d+ of [\d,]+ on screen · \d+ row elements/.test(view.live), `live line "${view.live}"`);
     expect(view.hash.endsWith('/leaderboard'), `hash ${view.hash}`);
     expect(view.total >= 1, 'no rows');
     expect(view.inDom <= 60, `${view.inDom} row elements in the DOM`);
@@ -200,10 +217,14 @@ try {
     return `${page.requests.length} requests, ${api} to the API`;
   });
 
-  await check('the first load is index.html, core.js and style.css; views arrive by import()', async () => {
+  await check('the first load is index.html and core.js; views, ui.js and styles arrive by import()', async () => {
     const local = page.requests.filter((r) => r.url.startsWith(`http://127.0.0.1:${PORT}/`)).map((r) => new URL(r.url).pathname);
-    expect(local.slice(0, 3).sort().join() === ['/', '/core.js', '/style.css'].sort().join(), `first requests ${local.slice(0, 3)}`);
-    return [...new Set(local)].join(' ');
+    expect(local.slice(0, 2).join() === '/,/core.js', `first requests ${local.slice(0, 2)}`);
+    expect(!local.some((p) => p.endsWith('.css')), 'a stylesheet file was requested');
+    const facts = await page.evaluate(`document.querySelector('.facts')?.textContent ?? ''`);
+    const gzip = ['index.html', 'core.js'].reduce((sum, file) => sum + gzipSync(readFileSync(join(ROOT, 'app', file)), { level: 9 }).length, 0);
+    expect(facts.startsWith(`2-file first load (${gzip.toLocaleString('en-US')} B gzip)`), `facts bar "${facts}" but index.html + core.js are ${gzip} B gzip-9`);
+    return `${[...new Set(local)].join(' ')} · ${facts}`;
   });
 
   await check('every surface fits 390 px with no sideways scroll', async () => {

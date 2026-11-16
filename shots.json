@@ -1,21 +1,21 @@
 [
   {
     "file": "1-board.png",
-    "path": "#/",
+    "path": "#/bounty/makefun-frontend-01",
     "viewport": {
       "width": 1280,
       "height": 800
     },
-    "shows": "The bounty board (cover): every live bounty with reward, entry fee, a live countdown and entries."
+    "shows": "Cover, split view: the live board list (reward, entry fee, countdown, entries) beside the selected bounty with live pot, entry fee, closes in, entries, dates and phases, rewards with fee shares, and its top 10."
   },
   {
-    "file": "2-bounty.png",
-    "path": "#/bounty/tiny-chess-01",
+    "file": "2-leaderboard.png",
+    "path": "#/bounty/tiny-chess-01/leaderboard",
     "viewport": {
       "width": 1280,
       "height": 800
     },
-    "shows": "A bounty page: live pot, entry fee, closes in, entries, the rewards table, dates and phases, and the top of its leaderboard."
+    "shows": "A full leaderboard of 6,000+ entries as a virtual list: linked handles, score and prize now, and the line saying which rows are on screen and how few elements exist."
   },
   {
     "file": "3-profile.png",
