@@ -1,0 +1,6 @@
+out/
+out2/
+node_modules/
+.claude/
+.shots-tmp/
+*.log
