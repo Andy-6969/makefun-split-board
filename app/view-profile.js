@@ -30,12 +30,12 @@ function avatarHTML(p) {
   return `<img class="avatar" crossorigin="anonymous" src="${esc(src)}" alt="" width="72" height="72" decoding="async">`;
 }
 
-/** A linked account: the API gives either a name or an object with url and username; only https links are kept. */
-function socialLink(label, value, urlFor) {
+/** A linked account, only when the API gives its https URL (an object with url); a bare name is shown as text. */
+function socialLink(label, value) {
   if (!value) return '';
-  const url = typeof value === 'object' ? value.url : urlFor(String(value));
-  if (!/^https:\/\//.test(url ?? '')) return '';
-  return `<a href="${esc(url)}" rel="noopener noreferrer" target="_blank">${label}</a>`;
+  const url = typeof value === 'object' ? value.url : null;
+  if (!/^https:\/\//.test(url ?? '')) return typeof value === 'string' ? `<span>${esc(label)} ${esc(value)}</span>` : '';
+  return `<a href="${esc(url)}" rel="noopener noreferrer" target="_blank">${esc(label)}</a>`;
 }
 
 /** One item per entry: the bounty, the entry's title, and its place, prize and score. */
@@ -80,10 +80,10 @@ async function renderProfile(main, { params: [handle], isCurrent }) {
   const name = p.display_name || p.handle;
   document.title = `${name} · make.fun`;
   const links = [
-    socialLink('GitHub', p.github_login, (name) => `https://github.com/${encodeURIComponent(name)}`),
-    socialLink('X', p.x, (name) => `https://x.com/${encodeURIComponent(name.replace(/^@/, ''))}`),
-    socialLink('Discord', p.discord, (id) => `https://discord.com/users/${encodeURIComponent(id)}`),
-    p.wallet?.address && `<a href="${esc(p.wallet.explorer_url ?? `https://solscan.io/account/${p.wallet.address}`)}" rel="noopener noreferrer" target="_blank">Wallet ${esc(p.wallet.address.slice(0, 4))}…${esc(p.wallet.address.slice(-4))}</a>`,
+    socialLink('GitHub', p.github_login ?? p.github),
+    socialLink('X', p.x),
+    socialLink('Discord', p.discord),
+    p.wallet?.address && socialLink(`Wallet ${p.wallet.address.slice(0, 4)}…${p.wallet.address.slice(-4)}`, { url: p.wallet.explorer_url }),
   ].filter(Boolean);
   const solutions = p.solutions ?? [];
   const payouts = p.payouts ?? [];

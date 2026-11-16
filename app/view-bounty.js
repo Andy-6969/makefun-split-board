@@ -10,6 +10,8 @@ function bountyState(b, now = Date.now()) {
   const end = Date.parse(b.deadline);
   if (b.status === 'resolved') return ['Resolved', 'pill-done'];
   if (b.status === 'closed') return ['Closed', 'pill-done'];
+  const opens = Date.parse(b.opensAt ?? b.publishedAt);
+  if (opens > now) return [`Opens ${utcDate(b.opensAt ?? b.publishedAt)}`, 'pill-wait'];
   if (end > now && b.acceptingSubmissions !== false) return ['Taking entries', 'pill-live'];
   if (end > now) return ['Not taking entries', 'pill-done'];
   return ['Past deadline · judging', 'pill-wait'];
@@ -151,29 +153,29 @@ async function renderBounty(main, { params: [slug], isCurrent }) {
       <dl class="strip">
         <div><dt>Live pot</dt><dd class="money" data-f="pot">${money(b.potUsd ?? b.rewardAmount)}</dd><small data-f="potNote">${fees > 0 ? `${money(b.rewardAmount)} reward + ${money(fees)} in fees` : 'fixed reward'}</small></div>
         <div><dt>Entry fee</dt><dd data-f="fee">${fee > 0 ? money(fee) : 'Free'}</dd><small data-f="feeNote">${fee > 0 ? `${count(b.entryFeePayers)} paid so far` : 'no entry fee'}</small></div>
-        <div><dt>Closes in</dt><dd>${countdownHTML(b.deadline)}</dd><small>${esc(utcDate(b.deadline))}</small></div>
+        <div><dt>${Date.parse(b.deadline) > Date.now() ? 'Closes in' : 'Deadline'}</dt><dd>${countdownHTML(b.deadline)}</dd><small>${esc(utcDate(b.deadline))}</small></div>
         <div><dt>Entries</dt><dd data-f="entries">${count(b.submissionCount)}</dd><small data-f="passed">${b.submissionsPassed != null ? `${count(b.submissionsPassed)} passed checks` : ''}</small></div>
       </dl>
       <div class="cols3">
         <section class="card" aria-labelledby="rw-h"><h2 id="rw-h">Rewards</h2>${rewardsCard(b)}</section>
-        <section class="card" aria-labelledby="dt-h"><h2 id="dt-h">Dates</h2>${phaseList(b)}</section>
+        <div class="stack">
+          <section class="card" aria-labelledby="dt-h"><h2 id="dt-h">Dates</h2>${phaseList(b)}</section>
+          <section class="card side" aria-labelledby="hw-h"><h2 id="hw-h">How it is judged</h2>
+            <p>${esc(b.resolution?.summary ?? 'The rules below say how entries are ranked.')}</p>
+          </section>
+        </div>
         <section class="card card-lb" aria-labelledby="lb-h"><h2 id="lb-h">Leaderboard</h2>
           <ol class="top10" data-f="top10"><li class="muted">Loading the standings…</li></ol>
           <a class="btn btn-wide" href="${lbHref}" data-f="lbLink">Full leaderboard</a>
         </section>
       </div>
-      <div class="cols-about">
-        <section class="card prose" aria-labelledby="ab-h"><h2 id="ab-h">About this bounty</h2>
-          ${b.summary ? `<p class="summary">${esc(b.summary)}</p>` : ''}
-          ${markdownToHTML(b.description)}
-          ${b.rules ? `<details class="rules" data-f="rules"><summary>Full rules</summary><div data-f="rulesBody"></div></details>` : ''}
-        </section>
-        <aside class="card side" aria-labelledby="hw-h"><h2 id="hw-h">How it is judged</h2>
-          <p>${esc(b.resolution?.summary ?? 'The rules below say how entries are ranked.')}</p>
-          ${b.skills?.length ? `<p class="tags">${b.skills.map((s) => `<span class="tag">${esc(s)}</span>`).join('')}</p>` : ''}
-          <p class="dim">Published ${esc(dayDate(b.publishedAt ?? b.opensAt))} · ${count(b.commentCount ?? 0)} comments</p>
-        </aside>
-      </div>
+      <section class="card prose about" aria-labelledby="ab-h"><h2 id="ab-h">About this bounty</h2>
+        ${b.skills?.length ? `<p class="tags">${b.skills.map((s) => `<span class="tag">${esc(s)}</span>`).join('')}</p>` : ''}
+        ${b.summary ? `<p class="summary">${esc(b.summary)}</p>` : ''}
+        ${markdownToHTML(b.description)}
+        <p class="dim">Published ${esc(dayDate(b.publishedAt ?? b.opensAt))} · ${count(b.commentCount ?? 0)} comments on make.fun</p>
+        ${b.rules ? `<details class="rules" data-f="rules"><summary>Full rules</summary><div data-f="rulesBody"></div></details>` : ''}
+      </section>
     </article>`;
 
   const f = fields(main);

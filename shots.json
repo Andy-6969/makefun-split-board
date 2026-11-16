@@ -1,5 +1,29 @@
 [
-  { "file": "1-board.jpg", "path": "#/", "viewport": { "width": 1280, "height": 800 } },
-  { "file": "2-bounty.jpg", "path": "#/bounty/threejs-fps-02", "viewport": { "width": 1280, "height": 800 } },
-  { "file": "3-bounty.jpg", "path": "#/bounty/bring-the-humans-01", "viewport": { "width": 1280, "height": 800 } }
+  {
+    "file": "1-board.png",
+    "path": "#/",
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "shows": "The bounty board (cover): every live bounty with reward, entry fee, a live countdown and entries."
+  },
+  {
+    "file": "2-bounty.png",
+    "path": "#/bounty/tiny-chess-01",
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "shows": "A bounty page: live pot, entry fee, closes in, entries, the rewards table, dates and phases, and the top of its leaderboard."
+  },
+  {
+    "file": "3-profile.png",
+    "path": "#/u/icantcodefyi",
+    "viewport": {
+      "width": 412,
+      "height": 892
+    },
+    "shows": "A public profile on a phone: record, entries with place, prize and score."
+  }
 ]

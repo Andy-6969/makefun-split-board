@@ -33,6 +33,7 @@ function toBoardRow(item, now) {
     deadline: item.deadline,
     end: Date.parse(item.deadline),
     published: Date.parse(item.publishedAt ?? item.deadline),
+    opensAt: item.opensAt ?? item.publishedAt,
     entries: item.submissionCount ?? 0,
     lastHour: recent >= RECENT_TIMES_CAP ? `${RECENT_TIMES_CAP}+` : String(recent),
   };
@@ -65,9 +66,10 @@ function updateBoardRow(row, b) {
   setText(f.fee, b.fee > 0 ? money(b.fee) : 'Free');
   setText(f.feeNote, b.fee > 0 ? `${count(b.payers)} paid` : 'to enter');
   if (f.time.firstElementChild?.dataset.end !== b.deadline) f.time.innerHTML = countdownHTML(b.deadline);
-  setText(f.date, utcDate(b.deadline));
+  const notOpenYet = Date.parse(b.opensAt) > Date.now();
+  setText(f.date, notOpenYet ? `opens ${utcDate(b.opensAt)}` : utcDate(b.deadline));
   setText(f.entries, count(b.entries));
-  setText(f.pace, `${b.lastHour} in the last hour`);
+  setText(f.pace, notOpenYet ? 'not open yet' : `${b.lastHour} in the last hour`);
 }
 
 /** Puts the chosen sort and category over the rows, in place. */
@@ -82,7 +84,7 @@ function patchBoardRows(view, state) {
   view.empty.hidden = open.length > 0;
   setText(view.empty, state.cat === 'All' ? 'No bounty is taking entries right now.' : `No ${state.cat} bounty is taking entries right now.`);
 
-  const live = view.rows.filter((b) => b.end > now);
+  const live = view.rows.filter((b) => b.end > now && !(Date.parse(b.opensAt) > now));
   setText(view.stats.open, count(live.length));
   setText(view.stats.pots, money(live.reduce((sum, b) => sum + b.pot, 0)));
   setText(view.stats.entries, count(live.reduce((sum, b) => sum + b.entries, 0)));

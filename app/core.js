@@ -1,6 +1,5 @@
-// The first-load module: an ETag-revalidating JSON cache over make.fun's public API, the hash router that
-// lazy-loads one view module per surface, prefetch on hover/focus, a keyed in-place DOM patch, the one-second
-// countdown ticker and the formatters every view shares. Views are fetched later with literal import() calls.
+// First load: ETag-revalidating JSON cache, hash router (one lazy view per surface), hover/focus prefetch,
+// keyed in-place patch, one countdown ticker, shared formatters.
 export { cachedJSON, watchJSON, prefetchOnIntent, patchKeyedList, startCountdownTicker, route, apiPath, fields, setText, esc, money, count, ordinal, utcDate, dayDate, countdownText, countdownHTML, scoreText, viewState };
 
 /** make.fun's public API: GET only, CORS open. */
@@ -28,10 +27,7 @@ const apiPath = {
   profile: (handle) => `/api/profiles/${encodeURIComponent(handle)}`,
 };
 
-/**
- * One route per surface. Each names its view module with a literal import() so the module stays out of the
- * first load, and the API paths it needs so the router (and hover prefetch) can start them alongside the module.
- */
+/** One route per surface: its view by literal import(), and the API paths started alongside it. */
 const ROUTES = [
   { name: 'board', pattern: /^#?\/?$/, view: () => import('./view-board.js'), data: () => [apiPath.board()] },
   { name: 'leaderboard', pattern: /^#\/bounty\/([^/]+)\/leaderboard$/, view: () => import('./view-leaderboard.js'), data: ([slug]) => [apiPath.bounty(slug)] },
@@ -46,10 +42,7 @@ class ApiError extends Error {
   }
 }
 
-/**
- * The cache every view reads through. A fresh answer comes from memory with no request; a stale one is returned
- * at once and revalidated in the background (stale-while-revalidate); a missing one is fetched.
- */
+/** Fresh: from memory, no request. Stale: returned at once, revalidated in the background. Missing: fetched. */
 function cachedJSON(path, freshMs = FRESH_MS) {
   const hit = jsonCache.get(path);
   if (!hit) return revalidate(path);
@@ -60,11 +53,8 @@ function cachedJSON(path, freshMs = FRESH_MS) {
 }
 
 /**
- * Asks make.fun again. cache: 'no-cache' makes the browser send If-None-Match with the ETag it holds, and
- * make.fun answers 304 within the minute. (A hand-written If-None-Match would need a CORS preflight, and make.fun's
- * 304 carries no CORS header, so the browser's own revalidation is the one that works cross-origin.) An answer whose
- * ETag matches the one in memory is not read or parsed again: the body is dropped and the same object is reused,
- * so views see an identical answer and patch nothing.
+ * cache: 'no-cache' makes the browser send If-None-Match itself (make.fun's 304 has no CORS header, so a manual
+ * one fails); within the minute make.fun answers 304. A matching ETag skips reading and parsing: same object back.
  */
 function revalidate(path) {
   const pending = inFlight.get(path);
@@ -144,10 +134,7 @@ function showNetStats() {
   });
 }
 
-/**
- * Brings a list of keyed elements in line with items, in place: an element whose key stays is updated (its text
- * nodes only, by update) and moved only when out of order; new keys are created, gone keys removed.
- */
+/** Keyed patch: kept keys are updated in place and moved only when out of order; new created, gone removed. */
 function patchKeyedList(parent, items, keyOf, create, update) {
   const byKey = new Map();
   for (const element of parent.children) byKey.set(element.dataset.key, element);
@@ -270,10 +257,7 @@ function matchRoute(hash) {
   return null;
 }
 
-/**
- * Renders the surface the hash names. The view module and its data load in parallel; window.__shotReady is false
- * until the view has its live data on screen (screenshot and test scripts wait on it).
- */
+/** Renders the hash's surface; module and data load in parallel. __shotReady turns true once live data shows. */
 async function route() {
   const hash = location.hash;
   if (hash && !hash.startsWith('#/')) return;
