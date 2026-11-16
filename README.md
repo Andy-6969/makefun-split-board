@@ -1,5 +1,11 @@
 # make.fun bounties: a fast, live frontend
 
+[![make.fun · makefun-frontend-01](https://make.fun/badge/makefun-frontend-01.svg)](https://make.fun/bounty/makefun-frontend-01?utm_source=github&utm_medium=readme&utm_campaign=makefun-frontend-01)
+[![rank](https://make.fun/badge/makefun-frontend-01/Andy-6969/makefun-split-board/rank.svg)](https://make.fun/bounty/makefun-frontend-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=makefun-frontend-01)
+[![reward](https://make.fun/badge/makefun-frontend-01/Andy-6969/makefun-split-board/reward.svg)](https://make.fun/bounty/makefun-frontend-01?utm_source=github&utm_medium=readme&utm_campaign=makefun-frontend-01)
+
+Bounty page: [make.fun/bounty/makefun-frontend-01](https://make.fun/bounty/makefun-frontend-01)
+
 An entry for make.fun's `makefun-frontend-01` bounty: a calm, dense board of make.fun's live bounties, a split
 board-beside-bounty view, a virtual leaderboard and public profiles. Plain static files in `app/` (ES modules, no
 framework, no build step) reading make.fun's public API (`https://make.fun/api`, GET only).
@@ -48,3 +54,7 @@ Accessible by default: skip link, visible focus rings, real links and buttons, 4
 `prefers-reduced-motion` and `prefers-color-scheme: dark` respected, one column at 390 px with no sideways scroll.
 
 MIT licensed (see LICENSE). `vendor/makefun-frontend.ts` is make.fun's library, unchanged.
+
+---
+
+Built as an entry in the [make.fun `makefun-frontend-01` bounty](https://make.fun/bounty/makefun-frontend-01).
