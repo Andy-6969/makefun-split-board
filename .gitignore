@@ -1,6 +1,17 @@
+# Paths kept out of git: build output, dependencies, local tooling and logs.
+
+# Build output
 out/
 out2/
+
+# Dependencies
 node_modules/
+
+# Local Claude Code settings
 .claude/
+
+# Temporary screenshot files
 .shots-tmp/
+
+# Log files
 *.log
