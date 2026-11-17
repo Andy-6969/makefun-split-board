@@ -1,33 +1,15 @@
 <!doctype html>
 <html lang="en">
-<head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>make.fun bounties</title>
 <link rel="icon" href="favicon.svg">
-<style>
-:root{--bg:#f4f1ea;--surface:#fffdf9;--ink:#1c1a16;--muted:#655f55;--line:#e0d9cc;--sans:system-ui,"Segoe UI",Roboto,sans-serif}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans)}
-a{color:inherit}
-.wrap{max-width:1232px;margin:auto;padding:0 24px}
-.top{background:var(--surface);border-bottom:1px solid var(--line)}
-.top-in{display:flex;flex-wrap:wrap;align-items:center;gap:0 24px;min-height:56px}
-.brand{font-size:18px;text-decoration:none}
-.net{margin:0 0 0 auto;font:12.5px ui-monospace,Consolas,monospace;color:var(--muted)}
-main{display:block;padding-top:20px;padding-bottom:48px;outline:0}
-.skip{position:absolute;left:-999px}.skip:focus{left:8px}
-@media(max-width:720px){.wrap{padding:0 16px}.net{flex-basis:100%;margin:0 0 8px}}
-</style>
-<script type="module" src="core.js"></script>
-</head>
-<body>
+<style>body{margin:0;background:#f4f1ea;color:#1c1a16;font:16px/1.5 system-ui,"Segoe UI",Roboto,sans-serif}@media(prefers-color-scheme:dark){body{background:#161512;color:#f1ece2}}.skip{position:absolute;left:-999px}.skip:focus{left:8px}</style>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top"><div class="wrap top-in">
 <a class="brand" href="#/"><b>make.fun</b> bounties</a>
-<nav class="nav"><a id="nav-board" href="#/">Open bounties</a></nav>
-<p class="net" id="net">connecting…</p>
+<nav class="nav"><a id="nav-board" href="#/">Bounties</a></nav>
+<p class="net"><span id="net" role="status">Loading…</span> <button id="refresh" type="button" class="btn btn-s">Refresh</button></p>
 </div></header>
-<main id="main" class="wrap" tabindex="-1">Loading live data…</main>
-</body>
-</html>
+<main id="main" class="wrap" tabindex="-1">Loading live data from make.fun…</main>
+<script type="module">import('./core.js')</script>

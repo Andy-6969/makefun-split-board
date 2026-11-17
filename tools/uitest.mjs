@@ -27,8 +27,8 @@ async function check(name, fn) {
 function expect(condition, message) {
   if (!condition) throw new Error(message);
 }
-/** The status line's numbers: "5 API calls · 2 cached · 1 × 304 · 412 KB JSON". */
-const NET = `(() => { const m = document.getElementById('net').textContent.match(/(\\d+) API calls? · (\\d+) cached · (\\d+) × 304/); return m && { calls: +m[1], cached: +m[2], notModified: +m[3] }; })()`;
+/** The status line's numbers for the current view: "This view: 4 API requests · 1 unchanged (304) · 2 from memory · 12 rows kept · 6 drawn". */
+const NET = `(() => { const m = document.getElementById('net').textContent.match(/^This view: (\\d+) API requests? · (\\d+) unchanged \\(304\\) · (\\d+) from memory · (\\d+) rows? kept · (\\d+) drawn$/); return m && { calls: +m[1], notModified: +m[2], cached: +m[3], kept: +m[4], drawn: +m[5] }; })()`;
 /** Clicks a link the way a person would (a real click event) and waits for the next route's data. */
 async function follow(page, selector) {
   const href = await page.evaluate(`(() => { const a = document.querySelector(${JSON.stringify(selector)}); if (!a) return null; window.__shotReady = false; a.click(); return a.getAttribute('href'); })()`);
@@ -83,11 +83,12 @@ try {
       const sorted = counts.every((n, i) => i === 0 || counts[i - 1] >= n);
       const sameElements = after.every((r) => before.includes(r));
       const hash = location.hash;
+      const probe = window.__probeRow.isConnected;
       const category = document.querySelector('[data-f=catChips] .chip:nth-child(2)');
       category.click();
       const filtered = [...document.querySelectorAll('.brow .meta')].every((m) => m.textContent.startsWith(category.value));
       document.querySelector('[data-f=catChips] .chip').click();
-      return { sorted, sameElements, hash, filtered, probe: window.__probeRow.isConnected };
+      return { sorted, sameElements, hash, filtered, probe };
     })()`);
     expect(result.sorted, 'rows are not in entry order');
     expect(result.sameElements && result.probe, 'rows were rebuilt instead of moved');
@@ -104,7 +105,11 @@ try {
       hash: location.hash, h1: document.querySelector('.split-detail h1').textContent,
       strip: [...document.querySelectorAll('.strip dd')].map((d) => d.textContent),
       rewards: document.querySelectorAll('.tbl tbody tr').length, potTotal: document.querySelector('[data-f=potTotal]')?.textContent,
-      dates: document.querySelectorAll('.datesbar > div').length,
+      dates: document.querySelectorAll('.tl-labels > div').length, now: !!document.querySelector('.tl-now'),
+      enter: document.querySelector('.btn-enter')?.getAttribute('href'), enterTarget: document.querySelector('.btn-enter')?.target,
+      tabs: [...document.querySelectorAll('.split-detail .tabs a')].map((a) => a.textContent.trim()),
+      bars: [...document.querySelectorAll('.tbl i.bar')].map((i) => parseFloat(i.style.width)),
+      avatars: [...document.querySelectorAll('.top10 .av')].map((el) => el.tagName === 'IMG' ? el.crossOrigin : 'initial'),
       top: document.querySelectorAll('.top10 .who a').length, about: document.querySelector('.prose').textContent.length,
       state: document.querySelector('.pill').textContent,
       listRows: document.querySelectorAll('.split-list .brow').length,
@@ -112,11 +117,64 @@ try {
     expect(view.hash === `#/bounty/${encodeURIComponent(bountySlug)}`, `hash ${view.hash}`);
     expect(view.strip.length === 4 && /^\$/.test(view.strip[0]), `strip ${view.strip}`);
     expect(view.rewards >= 1 && /^\$/.test(view.potTotal ?? ''), 'no rewards table');
-    expect(view.dates >= 2, 'no dates');
+    expect(view.dates === 3, 'no dates timeline');
+    expect(view.enter === `https://make.fun/bounty/${encodeURIComponent(bountySlug)}` && view.enterTarget === '_blank', `Enter link ${view.enter}`);
+    expect(view.tabs[0] === 'Overview' && /^Leaderboard [\d,]+$/.test(view.tabs[1]), `tabs ${view.tabs}`);
+    expect(view.bars.length >= 1 && view.bars[0] === Math.max(...view.bars) && view.bars.every((w) => w > 0 && w <= 100), `reward bars ${view.bars}`);
+    expect(view.avatars.length >= 1 && view.avatars.every((a) => a === 'anonymous' || a === 'initial'), `avatars ${view.avatars}`);
     expect(view.top >= 1, 'no leaderboard rows');
     expect(view.about > 200, 'no description');
     expect(view.listRows >= 3 && view.selected === view.hash, `split list ${view.listRows} rows, selected ${view.selected}`);
-    return `${view.h1} · ${view.strip.join(' / ')} · ${view.rewards} reward rows · ${view.dates} dates · ${view.state} · board list of ${view.listRows} beside it`;
+    return `${view.h1} · ${view.strip.join(' / ')} · ${view.rewards} reward rows with bars · timeline${view.now ? ' with Now' : ''} · ${view.avatars.length} avatars · ${view.state} · board list of ${view.listRows} beside it`;
+  });
+
+  await check('split panel: Live / Ended tabs with counts, type-to-filter, closing-soon badges, all patched in place', async () => {
+    await page.waitFor(`/\\d/.test(document.querySelector('[data-f=nEnded]').textContent)`, 60_000);
+    const result = await page.evaluate(`(async () => {
+      const panel = document.querySelector('.split-list');
+      const rows = () => [...panel.querySelectorAll('.brows:not([hidden]):not([data-f=recentList]) > .brow')];
+      const nLive = +panel.querySelector('[data-f=nLive]').textContent.replace(/,/g, '');
+      const nEnded = +panel.querySelector('[data-f=nEnded]').textContent.replace(/,/g, '');
+      const liveRows = rows();
+      const now = Date.now();
+      const badges = liveRows.map((r) => ({ soon: !r.querySelector('[data-f=soon]').hidden, end: Date.parse(r.querySelector('.cd').dataset.end) }));
+      const badgesRight = badges.every((b) => b.soon === (b.end - now < 864e5));
+      const recent = panel.querySelectorAll('[data-f=recentList] > .brow').length;
+      panel.querySelector('.seg button[value=ended]').click();
+      const endedRows = rows();
+      const allEnded = endedRows.every((r) => /^Ended /.test(r.querySelector('[data-f=time]').textContent));
+      const input = panel.querySelector('input.filter');
+      const word = endedRows[0].querySelector('.row-link').textContent.split(' ').slice(-1)[0].toLowerCase();
+      input.value = word;
+      input.dispatchEvent(new Event('input'));
+      const filtered = rows();
+      const filterOk = filtered.length >= 1 && filtered.length <= endedRows.length && filtered.every((r) => endedRows.includes(r));
+      input.value = '';
+      input.dispatchEvent(new Event('input'));
+      panel.querySelector('.seg button[value=live]').click();
+      const back = rows();
+      return { nLive, nEnded, live: liveRows.length, ended: endedRows.length, badgesRight, soonCount: badges.filter((b) => b.soon).length, recent, allEnded, word, filtered: filtered.length, filterOk, kept: back.every((r) => liveRows.includes(r)) && back.length === liveRows.length };
+    })()`);
+    expect(result.nLive === result.live && result.live >= 1, `Live count ${result.nLive} vs ${result.live} rows`);
+    expect(result.nEnded === result.ended && result.ended >= 1 && result.allEnded, `Ended count ${result.nEnded} vs ${result.ended} rows`);
+    expect(result.badgesRight, 'a closing-soon badge is wrong');
+    expect(result.recent >= 1, 'no recently ended rows under the live list');
+    expect(result.filterOk, `filter "${result.word}" gave ${result.filtered} rows`);
+    expect(result.kept, 'live rows were rebuilt after switching tabs');
+    return `Live ${result.nLive} (${result.soonCount} closing soon) · Ended ${result.nEnded} · "${result.word}" -> ${result.filtered} · ${result.recent} recently ended`;
+  });
+
+  await check('Refresh revalidates the view by ETag and keeps every row element', async () => {
+    const before = await page.evaluate(`(() => { window.__probeRows = [...document.querySelectorAll('.split-list .brow')]; return ${NET}; })()`);
+    const requests = page.requests.length;
+    await page.evaluate(`document.getElementById('refresh').click(); true`);
+    await page.waitFor(`!document.getElementById('refresh').disabled && (${NET}).calls > ${before.calls}`, 30_000);
+    await sleep(300);
+    const after = await page.evaluate(`({ net: ${NET}, kept: window.__probeRows.every((r) => r.isConnected) })`);
+    const sent = page.requests.slice(requests).filter((r) => r.url.startsWith('https://make.fun/api/'));
+    expect(sent.length >= 2, `Refresh sent ${sent.length} API requests`);
+    expect(after.kept, 'rows were rebuilt by Refresh');
+    return `${sent.length} revalidations (${sent.map((r) => page.statuses.get(r.id) ?? '?').join(',')}); status line ${after.net.calls} requests, ${after.net.notModified} × 304`;
   });
 
   await check('split view: picking another bounty keeps the board list and moves the selection in place', async () => {
@@ -130,15 +188,19 @@ try {
   });
 
   await check('bounty -> full leaderboard is virtualised and searchable', async () => {
-    const callsBefore = (await page.evaluate(NET)).calls;
     await follow(page, '[data-f=lbLink]');
     const net = await page.evaluate(NET);
-    const view = await page.evaluate(`({ hash: location.hash, total: +document.querySelector('.lrow')?.getAttribute('aria-setsize'), inDom: document.querySelectorAll('.lrow').length, live: document.querySelector('.lb-live').textContent })`);
+    const view = await page.evaluate(`({ hash: location.hash, total: +document.querySelector('.lrow')?.getAttribute('aria-setsize'), inDom: document.querySelectorAll('.lrow').length, live: document.querySelector('.lb-live').textContent,
+      faces: [...document.querySelectorAll('.lrow:not([hidden]) a')].filter((a) => [...a.querySelectorAll('.av')].some((el) => !el.hidden)).length,
+      cors: [...document.querySelectorAll('.lrow img.av')].every((img) => img.crossOrigin === 'anonymous') })`);
+    expect(view.faces >= Math.min(5, view.total), `${view.faces} rows show an avatar or initial`);
+    expect(view.cors, 'a leaderboard avatar lacks crossorigin');
     expect(/^Rows 1–\d+ of [\d,]+ on screen · \d+ row elements/.test(view.live), `live line "${view.live}"`);
     expect(view.hash.endsWith('/leaderboard'), `hash ${view.hash}`);
     expect(view.total >= 1, 'no rows');
     expect(view.inDom <= 60, `${view.inDom} row elements in the DOM`);
-    expect(net.calls === callsBefore, `the leaderboard was fetched again (${net.calls - callsBefore} calls); the bounty page's answer should be reused`);
+    expect(net.calls === 0 && net.cached >= 2, `this view sent ${net.calls} API requests, ${net.cached} from memory; the bounty page's answers should be reused`);
+    expect(net.drawn >= 1 && net.drawn <= 60, `status line says ${net.drawn} rows drawn`);
     const deep = await page.evaluate(`(async () => {
       const list = document.querySelector('.vlist');
       const target = Math.floor(${view.total} / 2);
@@ -177,31 +239,30 @@ try {
   });
 
   await check('back to the leaderboard and the bounty answers from the cache, no new request', async () => {
-    const before = await page.evaluate(NET);
     await page.evaluate('window.__shotReady = false; history.back(); true');
     await page.waitFor('window.__shotReady === true && location.hash.endsWith("/leaderboard")');
+    const board = await page.evaluate(NET);
     await page.evaluate('window.__shotReady = false; history.back(); true');
     await page.waitFor('window.__shotReady === true && /^#\\/bounty\\/[^/]+$/.test(location.hash)');
     await sleep(300);
     const after = await page.evaluate(NET);
-    expect(after.cached > before.cached, 'nothing was served from the cache');
-    expect(after.calls === before.calls, `${after.calls - before.calls} new API calls`);
-    return `cached ${before.cached} -> ${after.cached}, calls stay ${after.calls}`;
+    expect(board.cached >= 2 && board.calls === 0, `leaderboard view: ${board.calls} requests, ${board.cached} from memory`);
+    expect(after.cached >= 1, 'nothing was served from the cache');
+    return `leaderboard ${board.cached} from memory, ${board.calls} requests; bounty ${after.cached} from memory, ${after.calls} requests`;
   });
 
   await check('a stale answer is revalidated in the background and make.fun answers 304', async () => {
     // Answers stay fresh for 20 s; after that a visit shows the cached answer at once and revalidates it.
     await sleep(21_000);
     for (let attempt = 0; attempt < 3; attempt++) {
-      const before = await page.evaluate(NET);
       const boardRequests = page.requests.filter((r) => r.url.includes('/api/competitions?')).length;
-      await page.go('#/');
-      await page.waitFor(`(${NET}).calls > ${before.calls}`, 15_000);
+      await page.go(attempt % 2 ? '#/' : '#/?sort=pot');
+      await page.waitFor(`(${NET}).calls > 0`, 15_000);
       await sleep(1500);
       const after = await page.evaluate(NET);
       const revalidations = page.requests.filter((r) => r.url.includes('/api/competitions?')).slice(boardRequests);
       const statuses = revalidations.map((r) => page.statuses.get(r.id));
-      if (after.notModified > before.notModified && statuses.includes(304)) return `status line ${before.notModified} -> ${after.notModified} × 304; network status ${statuses.join(',')}`;
+      if (after.notModified > 0 && after.cached > 0 && statuses.includes(304)) return `status line: ${after.cached} from memory, ${after.notModified} × 304; network status ${statuses.join(',')}`;
       await sleep(21_000); // the ETag moved with the minute: try again once fresh
     }
     throw new Error('no 304 seen after three revalidations');
@@ -217,13 +278,17 @@ try {
     return `${page.requests.length} requests, ${api} to the API`;
   });
 
-  await check('the first load is index.html and core.js; views, ui.js and styles arrive by import()', async () => {
+  await check('the first load is index.html alone (under 800 B gzip); core, views, ui.js and styles arrive by import()', async () => {
     const local = page.requests.filter((r) => r.url.startsWith(`http://127.0.0.1:${PORT}/`)).map((r) => new URL(r.url).pathname);
     expect(local.slice(0, 2).join() === '/,/core.js', `first requests ${local.slice(0, 2)}`);
     expect(!local.some((p) => p.endsWith('.css')), 'a stylesheet file was requested');
+    const html = readFileSync(join(ROOT, 'app', 'index.html'), 'utf8');
+    expect(!/<script[^>]+src=|<link[^>]+rel="?(stylesheet|modulepreload)/.test(html), 'index.html references another file on first load');
+    expect(/<script type="module">import\('\.\/core\.js'\)<\/script>/.test(html), 'index.html boots without a literal import()');
     const facts = await page.evaluate(`document.querySelector('.facts')?.textContent ?? ''`);
-    const gzip = ['index.html', 'core.js'].reduce((sum, file) => sum + gzipSync(readFileSync(join(ROOT, 'app', file)), { level: 9 }).length, 0);
-    expect(facts.startsWith(`2-file first load (${gzip.toLocaleString('en-US')} B gzip)`), `facts bar "${facts}" but index.html + core.js are ${gzip} B gzip-9`);
+    const gzip = gzipSync(readFileSync(join(ROOT, 'app', 'index.html')), { level: 9 }).length;
+    expect(gzip < 800, `index.html is ${gzip} B gzip-9`);
+    expect(facts.startsWith(`1-file first load (${gzip.toLocaleString('en-US')} B gzip)`), `facts bar "${facts}" but index.html is ${gzip} B gzip-9`);
     return `${[...new Set(local)].join(' ')} · ${facts}`;
   });
 

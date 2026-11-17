@@ -2,7 +2,7 @@
 // with its place, prize and score, and the payouts they received with a link to each transaction.
 export { renderProfile as render, recordStats, entryItems, payoutItems, avatarHTML };
 
-import { apiPath, cachedJSON } from './core.js';
+import { apiPath, cachedJSON, countViewRows } from './core.js';
 import { count, dayDate, esc, money, ordinal, scoreText } from './ui.js';
 
 const MAKEFUN = 'https://make.fun';
@@ -111,6 +111,7 @@ async function renderProfile(main, { params: [handle], isCurrent }) {
       </div>
     </article>`;
 
+  countViewRows(0, solutions.length + payouts.length);
   scrollTo(0, 0);
   // Ready once the avatar is decoded (or failed), so a screenshot never shows a half-drawn image.
   const avatar = main.querySelector('img.avatar');

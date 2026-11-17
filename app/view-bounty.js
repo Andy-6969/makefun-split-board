@@ -2,16 +2,18 @@
 // changes, its selection patched in place) and the bounty on the right: live pot, entry fee, closes in, entries,
 // dates and status, the rewards table with fee shares and the top of its leaderboard. Phones get one column.
 // The leaderboard answer fetched here is the same cached answer the full leaderboard view reuses.
-export { renderBounty as render, renderSplitView, bountyState, rewardsTable, topRows, markdownToHTML };
+export { renderBounty as render, renderSplitView, bountyState, rewardsTable, timelineHTML, topRows, intervalColumns, markdownToHTML };
 
 import { apiPath, cachedJSON } from './core.js';
-import { count, countdownHTML, dayDate, esc, fields, money, ordinal, scoreText, setText, utcDate, watchJSON } from './ui.js';
+import { avatarHTML, count, countdownHTML, dayDate, esc, fields, money, ordinal, scoreText, setText, utcDate, watchJSON } from './ui.js';
 import { mountBoardList } from './view-board.js';
 
 /** Wide enough for the board list beside the bounty. */
 const SPLIT_QUERY = '(min-width: 1081px)';
 /** Leaderboard rows shown on the bounty page. */
-const TOP_ROWS = 10;
+const TOP_ROWS = 7;
+/** Where "Enter" goes: the bounty's own page on make.fun (a plain link; this app never writes). */
+const ENTER_URL = (slug) => `https://make.fun/bounty/${encodeURIComponent(slug)}`;
 /** The split view's list, kept while the user moves from bounty to bounty. */
 let split = null;
 
@@ -37,28 +39,60 @@ function rewardsTable(b) {
   if (!groups.length) return '<p class="muted">This bounty lists no paid places.</p>';
   const withFees = groups.some((g) => g.fee > 0);
   const places = groups.at(-1).to;
+  const top = Math.max(...groups.map((g) => g.amount)) || 1;
   const rows = groups
-    .map((g) => `<tr><th scope="row">${g.from === g.to ? ordinal(g.from) : `${ordinal(g.from)}–${ordinal(g.to)} <span class="muted">each</span>`}</th>${withFees ? `<td class="num">${money(g.base)}</td><td class="num muted">+${money(g.fee)}</td>` : ''}<td class="num money">${money(g.amount)}</td></tr>`)
+    .map((g) => `<tr><th scope="row">${g.from === g.to ? ordinal(g.from) : `${ordinal(g.from)}–${ordinal(g.to)} <span class="muted">each</span>`}<i class="bar" aria-hidden="true" style="width:${Math.max(3, Math.round((g.amount / top) * 100))}%"></i></th>${withFees ? `<td class="num">${money(g.base)}</td><td class="num muted">+${money(g.fee)}</td>` : ''}<td class="num money">${money(g.amount)}</td></tr>`)
     .join('');
-  return `<table class="tbl"><thead><tr><th scope="col">Place</th>${withFees ? '<th scope="col" class="num">Reward</th><th scope="col" class="num">Fee share</th>' : ''}<th scope="col" class="num">Prize now</th></tr></thead><tbody>${rows}</tbody>
+  return `<table class="tbl"><thead><tr><th scope="col">Place</th>${withFees ? '<th scope="col" class="num">Reward</th><th scope="col" class="num">Fee share</th>' : ''}<th scope="col" class="num">Pays now</th></tr></thead><tbody>${rows}</tbody>
     <tfoot><tr><th scope="row">Live pot <span class="muted">· ${count(places)} ${places === 1 ? 'place' : 'places'}</span></th>${withFees ? `<td class="num">${money(b.rewardAmount)}</td><td class="num muted" data-f="feesTotal">+${money(b.entryFeesUsd)}</td>` : ''}<td class="num money" data-f="potTotal">${money(b.potUsd ?? b.rewardAmount)}</td></tr></tfoot></table>`;
 }
 
-/** Opening, deadline and each phase on one line. */
-function datesBar(b) {
-  const phases = (b.phases ?? []).map((p) => `<div><dt>${esc(p.title)}</dt><dd>${esc(dayDate(p.startsAt).replace(/, \d{4}$/, ''))} → ${esc(utcDate(p.endsAt))} <span class="muted">· ${p.scores === 'live' ? 'scores live' : 'scores with results'}</span></dd></div>`);
-  return `<dl class="datesbar">
-    <div><dt>Opens</dt><dd>${esc(utcDate(b.opensAt ?? b.publishedAt))}</dd></div>
-    <div><dt>Deadline</dt><dd>${esc(utcDate(b.deadline))}</dd></div>
-    ${b.resolvedAt ? `<div><dt>Resolved</dt><dd>${esc(utcDate(b.resolvedAt))}</dd></div>` : ''}${phases.join('')}</dl>`;
+/**
+ * The bounty's dates as a timeline: opened, deadline and results (the last phase's end, or when it resolved) placed
+ * by time on one bar, the share already past filled, and a "Now" marker; each phase named under it.
+ */
+function timelineHTML(b, now = Date.now()) {
+  const opened = Date.parse(b.opensAt ?? b.publishedAt);
+  const deadline = Date.parse(b.deadline);
+  const lastPhase = (b.phases ?? []).at(-1);
+  const resultsISO = b.resolvedAt ?? (lastPhase && Date.parse(lastPhase.endsAt) > deadline ? lastPhase.endsAt : b.deadline);
+  const results = Math.max(Date.parse(resultsISO), deadline + 1);
+  const at = (t) => `${Math.min(100, Math.max(0, ((t - opened) / (results - opened)) * 100)).toFixed(2)}%`;
+  const phaseNote = (p) => (p ? ` · ${esc(p.title)}, ${p.scores === 'live' ? 'scores live' : 'scores with results'}` : '');
+  const [first, second] = b.phases ?? [];
+  return `<section class="timeline" aria-label="Dates">
+    <div class="tl-bar" aria-hidden="true">
+      <span class="tl-seg tl-dev" style="left:0;width:${at(deadline)}"></span>
+      <span class="tl-seg tl-fin" style="left:${at(deadline)};right:0"></span>
+      <span class="tl-done" style="width:${at(now)}"></span>
+      <span class="tl-tick" style="left:${at(deadline)}"></span>
+      ${now > opened && now < results ? `<span class="tl-now" style="left:${at(now)}"><b>Now</b></span>` : ''}
+    </div>
+    <dl class="tl-labels">
+      <div><dt>Opened</dt><dd>${esc(utcDate(new Date(opened).toISOString()))}</dd><small>${first ? phaseNote(first).slice(3) : 'entries open'}</small></div>
+      <div><dt>Deadline</dt><dd>${esc(utcDate(b.deadline))}</dd><small>last entries</small></div>
+      <div><dt>${b.resolvedAt ? 'Resolved' : 'Results'}</dt><dd>${esc(utcDate(resultsISO))}</dd><small>${second ? phaseNote(second).slice(3) : 'places final'}</small></div>
+    </dl>
+  </section>`;
 }
 
-/** The top rows of a leaderboard answer, each entrant linked to their profile. */
+/** The leaderboard's interval columns (low and high of the rank score's confidence interval), when it has them. */
+function intervalColumns(board) {
+  const low = board.columns?.find((c) => /interval_low/.test(c.source ?? ''));
+  const high = board.columns?.find((c) => /interval_high/.test(c.source ?? ''));
+  return low && high ? { low, high } : null;
+}
+
+/** The top rows of a leaderboard answer: avatar, linked handle, entry title, score with its interval. */
 function topRows(board, n = TOP_ROWS) {
   const column = board.columns?.find((c) => c.key === board.rank_key);
+  const interval = intervalColumns(board);
   const rows = (board.entries ?? [])
     .slice(0, n)
-    .map((e) => `<li><span class="rank">${e.rank ?? '—'}</span><span class="who"><a href="#/u/${encodeURIComponent(e.handle)}">${esc(e.handle)}</a> <span class="muted">${esc(e.title ?? '')}</span></span><span class="num">${esc(scoreText(e.display?.[board.rank_key], column))}</span></li>`)
+    .map((e) => {
+      const range = interval && e.display?.[interval.low.key] != null ? `<small>${esc(scoreText(e.display[interval.low.key], interval.low))}–${esc(scoreText(e.display[interval.high.key], interval.high))}</small>` : '';
+      return `<li${e.prize_eligible !== false && e.prize_rank ? ' class="paid"' : ''}><span class="rank">${e.rank ?? '—'}</span>${avatarHTML(e.image, e.handle)}<span class="who"><a href="#/u/${encodeURIComponent(e.handle)}">${esc(e.handle)}</a><span class="muted">${esc(e.title ?? '')}</span></span><span class="num">${esc(scoreText(e.display?.[board.rank_key], column))}${range}</span></li>`;
+    })
     .join('');
   return { rows, column: column?.title ?? 'Score', total: (board.entries?.length ?? 0) + (board.rest?.length ?? 0) };
 }
@@ -130,14 +164,18 @@ function bountyHTML(b, slug) {
   return `
     <article class="bounty">
       <p class="crumbs"><a href="#/">All bounties</a> <span aria-hidden="true">/</span> ${esc([b.category, b.sponsor?.name && `by ${b.sponsor.name}`].filter(Boolean).join(' · '))}</p>
-      <div class="title-row"><h1 tabindex="-1">${esc(b.title)}</h1><span class="pill ${stateClass}" data-f="state">${esc(stateLabel)}</span></div>
+      <div class="title-row"><h1 tabindex="-1">${esc(b.title)}</h1><span class="pills"><span class="pill ${stateClass}" data-f="state">${esc(stateLabel)}</span>${b.category ? `<span class="pill pill-wait">${esc(b.category)}</span>` : ''}</span></div>
+      <div class="head-tabs">
+        <nav class="tabs" aria-label="This bounty"><a href="#/bounty/${encodeURIComponent(slug)}" aria-current="page">Overview</a><a href="${lbHref}">Leaderboard <span class="n" data-f="lbCount">${count(b.submissionCount)}</span></a></nav>
+        <a class="btn btn-accent btn-enter" href="${ENTER_URL(slug)}" rel="noopener noreferrer" target="_blank">Enter on make.fun <span aria-hidden="true">↗</span></a>
+      </div>
       <dl class="strip">
         <div><dt>Live pot</dt><dd class="money" data-f="pot">${money(b.potUsd ?? b.rewardAmount)}</dd><small data-f="potNote">${fees > 0 ? `${money(b.rewardAmount)} reward + ${money(fees)} fees` : 'fixed reward'}</small></div>
         <div><dt>Entry fee</dt><dd>${fee > 0 ? money(fee) : 'Free'}</dd><small data-f="feeNote">${fee > 0 ? `${count(b.entryFeePayers)} paid so far` : 'no entry fee'}</small></div>
         <div><dt>${Date.parse(b.deadline) > Date.now() ? 'Closes in' : 'Deadline'}</dt><dd>${countdownHTML(b.deadline)}</dd><small>${esc(utcDate(b.deadline))}</small></div>
         <div><dt>Entries</dt><dd data-f="entries">${count(b.submissionCount)}</dd><small data-f="passed">${b.submissionsPassed != null ? `${count(b.submissionsPassed)} passed checks` : ''}</small></div>
       </dl>
-      ${datesBar(b)}
+      ${timelineHTML(b)}
       <div class="cols2">
         <section class="card" aria-labelledby="rw-h"><h2 id="rw-h">Rewards</h2>${rewardsTable(b)}</section>
         <section class="card" aria-labelledby="lb-h"><h2 id="lb-h">Leaderboard</h2>
@@ -162,10 +200,9 @@ async function renderSplitView(main, slug) {
     split?.list.stop();
     const shell = document.createElement('div');
     shell.className = 'split';
-    shell.innerHTML = '<aside class="split-list card" aria-label="Open bounties"><h2>Open bounties <span class="n" data-f="n"></span></h2><ol class="brows" data-f="list"></ol></aside><div class="split-detail" data-f="detail"></div>';
+    shell.innerHTML = '<aside class="split-list card" aria-label="Bounties" data-f="panel"></aside><div class="split-detail" data-f="detail"></div>';
     const f = fields(shell);
-    const list = await mountBoardList(f.list, slug);
-    setText(f.n, count(list.shown));
+    const list = await mountBoardList(f.panel, slug);
     split = { shell, list, detail: f.detail };
   }
   return split;
@@ -218,8 +255,9 @@ async function renderBounty(main, { params: [slug], isCurrent }) {
     const board = await cachedJSON(apiPath.leaderboard(slug));
     if (!isCurrent()) return cleanup;
     const top = topRows(board);
-    f.top.innerHTML = top.rows ? `<li class="top10-head" aria-hidden="true"><span>#</span><span>Entrant</span><span class="num">${esc(top.column)}</span></li>${top.rows}` : '<li class="muted">No ranked entries yet.</li>';
+    f.top.innerHTML = top.rows ? `<li class="top10-head" aria-hidden="true"><span>#</span><span></span><span>Entrant</span><span class="num">${esc(top.column)}</span></li>${top.rows}` : '<li class="muted">No ranked entries yet.</li>';
     setText(f.lbLink, `Full leaderboard · ${count(top.total)} ranked`);
+    setText(f.lbCount, count(top.total));
   } catch (error) {
     f.top.innerHTML = `<li class="muted">The leaderboard did not load: ${esc(error.message)}</li>`;
   }

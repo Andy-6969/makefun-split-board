@@ -3,8 +3,8 @@
 // nodes. A search box narrows the list to matching entrants without leaving the page.
 export { renderLeaderboard as render, VirtualRows, flattenStandings, ROW_HEIGHT };
 
-import { apiPath, cachedJSON } from './core.js';
-import { count, esc, fields, money, scoreText, setText } from './ui.js';
+import { apiPath, cachedJSON, countViewRows } from './core.js';
+import { avatarURL, count, esc, fields, money, scoreText, setText } from './ui.js';
 
 /** Every row has this height in px, so a row's position is its index times this. */
 const ROW_HEIGHT = 56;
@@ -14,7 +14,17 @@ const OVERSCAN = 8;
 /** Top entries (full objects) and the rest (slim rows) as one array of what a row shows. */
 function flattenStandings(board, prizes) {
   const column = board.columns?.find((c) => c.key === board.rank_key);
+  const low = board.columns?.find((c) => /interval_low/.test(c.source ?? ''));
+  const high = board.columns?.find((c) => /interval_high/.test(c.source ?? ''));
+  // Top entries carry the interval as display columns; the slim rest rows carry it as interval.low / .high.
+  const rangeOf = (e) => {
+    const lo = e.interval?.low ?? (low && e.display?.[low.key]);
+    const hi = e.interval?.high ?? (high && e.display?.[high.key]);
+    return lo != null && hi != null && low ? `${scoreText(lo, low)}–${scoreText(hi, high ?? low)}` : '';
+  };
   const toRow = (e, display) => ({
+    image: avatarURL(e.image),
+    range: rangeOf(e),
     rank: e.rank,
     handle: e.handle,
     title: e.title ?? '',
@@ -58,7 +68,10 @@ class VirtualRows {
   draw() {
     this.frame = 0;
     const size = Math.ceil(innerHeight / ROW_HEIGHT) + OVERSCAN * 2;
+    let drawn = 0;
+    let kept = 0;
     while (this.pool.length < size) {
+      drawn++;
       const row = this.create();
       row._index = -1;
       row.setAttribute('aria-setsize', String(this.items.length));
@@ -77,6 +90,7 @@ class VirtualRows {
         row.style.transform = `translateY(${index * ROW_HEIGHT}px)`;
         row.setAttribute('aria-posinset', String(index + 1));
         this.fill(row, this.items[index]);
+        kept++;
       }
       row.hidden = false;
     }
@@ -85,6 +99,8 @@ class VirtualRows {
       row.hidden = true;
       row._index = -1;
     }
+    // Kept: pool rows refilled in place for a new index; drawn: row elements created (only while the pool grows).
+    countViewRows(Math.max(0, kept - drawn), drawn);
     const firstOnScreen = Math.max(0, Math.floor(-top / ROW_HEIGHT));
     const lastOnScreen = Math.min(this.items.length, Math.ceil((innerHeight - top) / ROW_HEIGHT));
     this.onDraw?.(firstOnScreen, lastOnScreen, this.items.length, this.pool.length);
@@ -99,8 +115,13 @@ class VirtualRows {
 function createRow() {
   const row = document.createElement('li');
   row.className = 'lrow';
-  row.innerHTML = '<a data-f="link"><span class="rank" data-f="rank"></span><span class="who"><b data-f="handle"></b><span class="tag" data-f="tag"></span><span class="muted" data-f="title"></span></span><span class="num" data-f="score"></span><span class="num money" data-f="prize"></span></a>';
+  row.innerHTML = '<a data-f="link"><span class="rank" data-f="rank"></span><span class="av av-none" data-f="initial" aria-hidden="true"></span><img class="av" data-f="img" alt="" decoding="async" hidden><span class="who"><b data-f="handle"></b><span class="tag" data-f="tag"></span><span class="muted" data-f="title"></span></span><span class="num"><b data-f="score"></b><small data-f="range"></small></span><span class="num money" data-f="prize"></span></a>';
   row._f = fields(row);
+  row._f.img.crossOrigin = 'anonymous';
+  row._f.img.addEventListener('error', () => {
+    row._f.img.hidden = true;
+    row._f.initial.hidden = false;
+  });
   return row;
 }
 
@@ -114,6 +135,18 @@ function fillRow(row, item) {
   f.tag.hidden = !item.tag;
   setText(f.title, item.title);
   setText(f.score, item.score);
+  setText(f.range, item.range);
+  // A pool row is reused for another entrant on scroll: the avatar follows (crossorigin was set at creation, before any src).
+  setText(f.initial, item.handle.slice(0, 1).toUpperCase());
+  if (item.image) {
+    if (f.img.getAttribute('src') !== item.image) f.img.src = item.image;
+    f.img.hidden = false;
+    f.initial.hidden = true;
+  } else {
+    f.img.hidden = true;
+    f.img.removeAttribute('src');
+    f.initial.hidden = false;
+  }
   setText(f.prize, item.prize);
 }
 
@@ -140,7 +173,7 @@ async function renderLeaderboard(main, { params: [slug], isCurrent }) {
         <label class="search"><span>Find an entrant</span><input type="search" data-f="q" placeholder="Handle or entry title" autocomplete="off" spellcheck="false"></label>
       </div>
       <div class="ltable">
-        <div class="lhead" aria-hidden="true"><span>Rank</span><span>Entrant and entry</span><span class="num">${esc(column?.title ?? 'Score')}</span><span class="num">Prize now</span></div>
+        <div class="lhead" aria-hidden="true"><span>Rank</span><span>Entrant and entry</span><span class="num">${esc(column?.title ?? 'Score')}${all.some((r) => r.range) ? ' · interval' : ''}</span><span class="num">Prize now</span></div>
         <ol class="vlist" aria-label="Standings" data-f="list"></ol>
         <p class="empty" data-f="none" hidden>No entrant matches that search.</p>
       </div>
